@@ -1,24 +1,33 @@
 # This is a basic workflow to help you get started with Actions
 
-name: CI
+name: Terraform CI
 
 # Controls when the workflow will run
 on:
   # Triggers the workflow on push or pull request events but only for the "main" branch
-  push:
-    branches: [ "main" ]
+  # push:
+  #   branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
+
+
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
+
+permissions:
+    #id-token: write
+    contents: read
+
 jobs:
   # This workflow contains a single job called "build"
-  build:
+  #build:
+  terraform:
     # The type of runner that the job will run on
     runs-on: ubuntu-latest
+    environment: preprod
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
@@ -26,11 +35,61 @@ jobs:
       - uses: actions/checkout@v4
 
       # Runs a single command using the runners shell
-      - name: Run a one-line script
-        run: echo Hello, world!
+      # - name: Run a one-line script
+      #   run: echo Hello, world!
+
+      # Install/setup Terraform
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
 
       # Runs a set of commands using the runners shell
-      - name: Run a multi-line script
-        run: |
-          echo Add other actions to build,
-          echo test, and deploy your project.
+      # - name: Run a multi-line script
+      #   run: |
+      #     echo Add other actions to build,
+      #     echo test, and deploy your project.
+
+      # Display Terraform version
+    
+      - name: Terraform Version
+        run: terraform version
+      # Check Terraform formatting
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive
+      # Initialize Terraform without remote backend
+      # Initialize Terraform for validation only
+      # Does not connect to the Azure remote backend
+      - name: Terraform Init - Validation
+        run: terraform init -backend=false
+
+      - name: Terraform Validate
+        run: terraform validate
+
+      # Scan Terraform/IaC configuration for security issues
+      - name: Terraform Security Scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: config
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: |
+            {
+              "clientId": "${{ secrets.AZURE_CLIENT_ID }}",
+              "clientSecret": "${{ secrets.AZURE_CLIENT_SECRET }}",
+              "subscriptionId": "${{ secrets.AZURE_SUBSCRIPTION_ID }}",
+              "tenantId": "${{ secrets.AZURE_TENANT_ID }}"
+            }
+      # Verify Azure authentication and subscription
+      - name: Azure Account
+        run: az account show
+              # Initialize Terraform with the configured backend
+      - name: Terraform Init
+        run: terraform init
+
+      # Create Terraform execution plan
+      - name: Terraform Plan
+        run: terraform plan
